@@ -923,19 +923,28 @@ class ExiDecoderCode(ExiBaseCoderCode):
         init_fn = (f'{CONFIG_PARAMS["init_function_prefix"]}{self.__schema_prefix}'
                    f'{CONFIG_PARAMS["xmldsig_fragment_struct_name"]}')
 
-        decode_fn = []
+        all_fragments = []
         for fragment in self.analyzer_data.known_fragments.values():
-            if 'xmldsig' in fragment.namespace.casefold() and (fragment.name in self.__xmldsigfragments or self.__generate_all_xmldsig_fragment is True):
+            if 'xmldsig' in fragment.namespace.casefold():
                 if fragment.type in self.analyzer_data.known_elements.values():
                     function = f'{CONFIG_PARAMS["decode_function_prefix"]}{self.__schema_prefix}{fragment.type}'
                     parameter = f'{parameter_name}->{fragment.name}'
-                    decode_fn.append([fragment.name, fragment.namespace, function, parameter])
+                    all_fragments.append([fragment.name, fragment.namespace, function, parameter])
                 else:
-                    decode_fn.append([fragment.name, fragment.namespace, '', ''])
+                    all_fragments.append([fragment.name, fragment.namespace, '', ''])
 
-        decode_fn.sort()
-        end_fragment = len(decode_fn) + 1
-        bits = tools.get_bits_to_decode(len(decode_fn))
+        all_fragments.sort()
+
+        decode_fn = []
+        for name, namespace, function, parameter in all_fragments:
+            if 'xmldsig' in namespace.casefold() and (name in self.__xmldsigfragments
+                                                      or self.__generate_all_xmldsig_fragment is True):
+                decode_fn.append([name, namespace, function, parameter])
+            else:
+                decode_fn.append([name, namespace, '', ''])
+
+        end_fragment = len(all_fragments) + 1
+        bits = tools.get_bits_to_decode(len(all_fragments))
 
         temp = self.generator.get_template('DecodeFragmentFunction.jinja')
         content += temp.render(function_comment=comment,
