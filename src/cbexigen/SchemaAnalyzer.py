@@ -544,6 +544,10 @@ class SchemaAnalyzer(object):
                     particle.has_simple_content = True
                     particle.simple_content_names.append(child_element.local_name)
 
+    @staticmethod
+    def __iter_sorted_substitution_group(subst_group):
+        return sorted(subst_group, key=lambda item: (item.local_name or '', item.qualified_name or ''))
+
     def __get_particle_list(self, element: XsdElement, subst_list):
         particles = []
         child_count = sum(1 for _ in element.iterchildren())
@@ -574,7 +578,7 @@ class SchemaAnalyzer(object):
                 qname = self.__get_name(child)
                 subst_group = self.__current_schema.substitution_groups._target_dict.get(qname)
                 if subst_group:
-                    for elem in subst_group:
+                    for elem in self.__iter_sorted_substitution_group(subst_group):
                         particle = self.__get_abstract_particle(child, elem)
                         particles.append(particle)
                         subst_list.append(elem)
@@ -592,7 +596,7 @@ class SchemaAnalyzer(object):
             qname = self.__get_name(element)
             subst_group = self.__current_schema.substitution_groups._target_dict.get(qname)
             if subst_group:
-                for elem in subst_group:
+                for elem in self.__iter_sorted_substitution_group(subst_group):
                     particle = self.__get_abstract_particle(element, elem)
                     particles.append(particle)
                     subst_list.append(elem)
@@ -859,7 +863,7 @@ class SchemaAnalyzer(object):
                 qname = self.__get_name(child)
                 sg = self.__current_schema.substitution_groups._target_dict.get(qname)
                 if sg:
-                    for substitute in sg:
+                    for substitute in self.__iter_sorted_substitution_group(sg):
                         substitute_type_name = self.__get_type_name(substitute)
                         msg_write(level * "    " + str(level) + "." + str(count) + " " +
                                   substitute.name + " -> " + substitute_type_name)

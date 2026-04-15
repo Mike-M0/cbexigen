@@ -135,7 +135,8 @@ class DatatypeHeader:
 
     def __generate_defines(self):
         temp = self.generator.get_template('BaseDefines.jinja')
-        return temp.render(defines=self.__global_define_list)
+        defines = dict(sorted(self.__global_define_list.items()))
+        return temp.render(defines=defines)
 
     def __generate_functions_enum(self):
         comment = '// enum for function numbers'
@@ -563,8 +564,9 @@ class DatatypeHeader:
 
         # generate prototypes for elements
         temp = self.generator.get_template('BasePrototype.jinja')
+        prototypes = dict(sorted(self.analyzer_data.known_prototypes.items()))
         return temp.render(comment=comment,
-                           elements=self.analyzer_data.known_prototypes)
+                           elements=prototypes)
 
     def __append_to_global_define_list(self, element: ElementData):
         # TODO: check if particle is in OCCURRENCE_LIMITS_CORRECTED, should then result in an array definition;
@@ -903,7 +905,9 @@ class DatatypeCode:
         result = ''
         comment = ''
 
-        for element in self.analyzer_data.generate_elements:
+        sorted_elements = sorted(self.analyzer_data.generate_elements,
+                                 key=lambda item: (item.name_short, item.type_short, item.level, item.count))
+        for element in sorted_elements:
             if not element.type_definition == 'enum':
                 ele.clear()
                 arr.clear()
