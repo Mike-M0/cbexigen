@@ -326,6 +326,10 @@ class DatatypeHeader:
         temp = self.generator.get_template('SubUnionOptimized.jinja')
         return temp.render(indent=indent, level=indent_level, name=name, comment=comment) + '\n'
 
+    def __generate_union_dummy_member(self, indent_level=2):
+        indent = ' ' * self.config['c_code_indent_chars']
+        return f'{indent * indent_level}int dummy;\n'
+
     def __get_particle_content(self, particle: Particle, elements, indent_level=1):
         content = ''
         last = None
@@ -406,11 +410,17 @@ class DatatypeHeader:
 
                     union_content = ''
                     element_names = []
+                    all_optimized = True
                     for choice_particle in element.particles:
                         if (choice_particle.generated_choice_group == particle.generated_choice_group
                                 and not choice_particle.parent_has_choice_sequence):
                             union_content += self.__get_particle_union_content(choice_particle, 2)
                             element_names.append(choice_particle.name)
+                            if not choice_particle.is_optimized:
+                                all_optimized = False
+
+                    if all_optimized:
+                        union_content += self.__generate_union_dummy_member()
 
                     struct_content += self.__generate_variables_with_union_and_used(
                         union_content, element_names)
