@@ -132,6 +132,18 @@ class ExiDecoderCode(ExiBaseCoderCode):
 
         return content
 
+    @staticmethod
+    def __get_particle_storage_path(element_typename, particle: Particle):
+        if particle.parent_has_choice_sequence:
+            return f'{element_typename}->{particle.generated_choice_container_name}.{particle.name}'
+        return f'{element_typename}->{particle.name}'
+
+    @staticmethod
+    def __get_particle_used_path(element_typename, particle: Particle):
+        if particle.parent_has_choice_sequence:
+            return f'{element_typename}->{particle.generated_choice_container_name}'
+        return f'{element_typename}->{particle.name}'
+
     # ---------------------------------------------------------------------------
     # content delivery functions
     # ---------------------------------------------------------------------------
@@ -139,15 +151,10 @@ class ExiDecoderCode(ExiBaseCoderCode):
         decode_comment = '// decode exi type: hexBinary'
         if detail.particle.is_attribute:
             decode_comment += ' (Attribute)'
-        if detail.particle.parent_has_choice_sequence:
-            type_value = \
-                f'{element_typename}->choice_{detail.particle.parent_choice_sequence_number}.{detail.particle.name}'
-            type_content = type_value + f'.{detail.particle.value_parameter_name}'
-            type_content_len = type_value + f'.{detail.particle.length_parameter_name}'
-        else:
-            type_value = f'{element_typename}->{detail.particle.name}'
-            type_content = type_value + f'.{detail.particle.value_parameter_name}'
-            type_content_len = type_value + f'.{detail.particle.length_parameter_name}'
+        type_value = self.__get_particle_storage_path(element_typename, detail.particle)
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
+        type_content = type_value + f'.{detail.particle.value_parameter_name}'
+        type_content_len = type_value + f'.{detail.particle.length_parameter_name}'
         type_define = detail.particle.prefixed_define_for_base_type
         next_grammar_id = detail.next_grammar
 
@@ -157,6 +164,7 @@ class ExiDecoderCode(ExiBaseCoderCode):
                                      type_content=type_content,
                                      type_content_len=type_content_len,
                                      type_define=type_define,
+                                     type_used=type_used,
                                      type_option=detail.particle.is_optional,
                                      next_grammar_id=next_grammar_id,
                                      indent=self.indent, level=level)
@@ -165,7 +173,8 @@ class ExiDecoderCode(ExiBaseCoderCode):
 
     def __get_content_decode_base64_binary_simple(self, element_typename, detail: ElementGrammarDetail, level):
         decode_comment = '// decode exi type: base64Binary (simple)'
-        type_value = f'{element_typename}->{detail.particle.name}'
+        type_value = self.__get_particle_storage_path(element_typename, detail.particle)
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
         type_content = type_value + f'.{detail.particle.value_parameter_name}'
         type_content_len = type_value + f'.{detail.particle.length_parameter_name}'
 
@@ -178,6 +187,7 @@ class ExiDecoderCode(ExiBaseCoderCode):
                                      type_content=type_content,
                                      type_content_len=type_content_len,
                                      type_define=type_define,
+                                     type_used=type_used,
                                      type_option=detail.particle.is_optional,
                                      next_grammar_id=next_grammar_id,
                                      indent=self.indent, level=level)
@@ -188,24 +198,19 @@ class ExiDecoderCode(ExiBaseCoderCode):
         decode_comment = '// decode exi type: base64Binary'
         if detail.particle.is_attribute:
             decode_comment += ' (Attribute)'
-        if detail.particle.parent_has_choice_sequence:
-            type_value = \
-                f'{element_typename}->choice_{detail.particle.parent_choice_sequence_number}.{detail.particle.name}'
-            type_content = type_value + f'.{detail.particle.value_parameter_name}'
-            type_content_len = type_value + f'.{detail.particle.length_parameter_name}'
-        elif detail.particle.has_simple_content:
-            type_value = f'{element_typename}->{detail.particle.name}.CONTENT'
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
+        if detail.particle.has_simple_content:
+            type_value = self.__get_particle_storage_path(element_typename, detail.particle) + '.CONTENT'
             type_content = type_value + f'.{detail.particle.value_parameter_name}'
             type_content_len = type_value + f'.{detail.particle.length_parameter_name}'
         else:
+            type_value = self.__get_particle_storage_path(element_typename, detail.particle)
             if detail.particle.max_occurs > 1:
                 decode_comment += ' (Array)'
-                type_array_length = f'{element_typename}->{detail.particle.name}.arrayLen'
-                type_value = f'{element_typename}->{detail.particle.name}'
+                type_array_length = f'{type_value}.arrayLen'
                 type_content_len = type_value + f'.array[{type_array_length}].{detail.particle.length_parameter_name}'
                 type_content = type_value + f'.array[{type_array_length}].{detail.particle.value_parameter_name}'
             else:
-                type_value = f'{element_typename}->{detail.particle.name}'
                 type_content = type_value + f'.{detail.particle.value_parameter_name}'
                 type_content_len = type_value + f'.{detail.particle.length_parameter_name}'
 
@@ -218,9 +223,10 @@ class ExiDecoderCode(ExiBaseCoderCode):
                                      type_content=type_content,
                                      type_content_len=type_content_len,
                                      type_define=type_define,
+                                     type_used=type_used,
                                      type_option=detail.particle.is_optional,
                                      type_array=detail.particle.max_occurs > 1,
-                                     type_array_length=f'{element_typename}->{detail.particle.name}.arrayLen',
+                                     type_array_length=f'{type_value}.arrayLen',
                                      type_array_define=detail.particle.prefixed_define_for_array,
                                      next_grammar_id=next_grammar_id,
                                      indent=self.indent, level=level)
@@ -231,13 +237,15 @@ class ExiDecoderCode(ExiBaseCoderCode):
         decode_comment = '// decode: boolean'
         if detail.particle.is_attribute:
             decode_comment += ' (Attribute)'
-        type_value = f'{element_typename}->{detail.particle.name}'
+        type_value = self.__get_particle_storage_path(element_typename, detail.particle)
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
         next_grammar_id = detail.next_grammar
 
         temp = self.generator.get_template('DecodeTypeBoolean.jinja')
         decode_content = temp.render(decode_comment=decode_comment,
                                      bits_to_decode=detail.particle.bit_count_for_coding,
                                      type_value=type_value,
+                                     type_used=type_used,
                                      type_option=detail.particle.is_optional,
                                      next_grammar_id=next_grammar_id,
                                      indent=self.indent, level=level)
@@ -245,7 +253,8 @@ class ExiDecoderCode(ExiBaseCoderCode):
         return decode_content
 
     def __get_content_decode_byte(self, element_typename, detail: ElementGrammarDetail, level):
-        type_value = f'{element_typename}->{detail.particle.name}'
+        type_value = self.__get_particle_storage_path(element_typename, detail.particle)
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
         next_grammar_id = detail.next_grammar
 
         if detail.particle.integer_is_unsigned:
@@ -258,6 +267,7 @@ class ExiDecoderCode(ExiBaseCoderCode):
         decode_content = temp.render(decode_comment=decode_comment,
                                      bits_to_decode=8,
                                      type_value=type_value,
+                                     type_used=type_used,
                                      type_offset=(0 if detail.particle.integer_is_unsigned else -128),
                                      type_int=tools.TYPE_TRANSLATION_C[detail.particle.integer_base_type],
                                      type_option=detail.particle.is_optional,
@@ -270,7 +280,8 @@ class ExiDecoderCode(ExiBaseCoderCode):
         decode_comment = '// decode: restricted integer (4096 or fewer values)'
         if detail.particle.is_attribute:
             decode_comment += ' (Attribute)'
-        type_value = f'{element_typename}->{detail.particle.name}'
+        type_value = self.__get_particle_storage_path(element_typename, detail.particle)
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
         type_offset = detail.particle.min_value
         next_grammar_id = detail.next_grammar
 
@@ -278,6 +289,7 @@ class ExiDecoderCode(ExiBaseCoderCode):
         decode_content = temp.render(decode_comment=decode_comment,
                                      bits_to_decode=detail.particle.bit_count_for_coding,
                                      type_value=type_value,
+                                     type_used=type_used,
                                      type_offset=type_offset,
                                      type_int=tools.TYPE_TRANSLATION_C[detail.particle.integer_base_type],
                                      type_option=detail.particle.is_optional,
@@ -287,7 +299,8 @@ class ExiDecoderCode(ExiBaseCoderCode):
         return decode_content
 
     def __get_content_decode_short(self, element_typename, detail: ElementGrammarDetail, level):
-        type_value = f'{element_typename}->{detail.particle.name}'
+        type_value = self.__get_particle_storage_path(element_typename, detail.particle)
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
         next_grammar_id = detail.next_grammar
 
         if detail.particle.integer_is_unsigned:
@@ -302,6 +315,7 @@ class ExiDecoderCode(ExiBaseCoderCode):
 
         decode_content = temp.render(decode_comment=decode_comment,
                                      type_value=type_value,
+                                     type_used=type_used,
                                      type_option=detail.particle.is_optional,
                                      next_grammar_id=next_grammar_id,
                                      indent=self.indent, level=level)
@@ -309,8 +323,10 @@ class ExiDecoderCode(ExiBaseCoderCode):
         return decode_content
 
     def __get_content_decode_short_array(self, element_typename, detail: ElementGrammarDetail, level):
-        type_array = f'{element_typename}->{detail.particle.name}.{detail.particle.value_parameter_name}'
-        type_array_len = f'{element_typename}->{detail.particle.name}.{detail.particle.length_parameter_name}'
+        type_value = self.__get_particle_storage_path(element_typename, detail.particle)
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
+        type_array = f'{type_value}.{detail.particle.value_parameter_name}'
+        type_array_len = f'{type_value}.{detail.particle.length_parameter_name}'
         next_grammar_id = detail.next_grammar
 
         template_file = 'DecodeTypeElementArray.jinja'
@@ -328,6 +344,7 @@ class ExiDecoderCode(ExiBaseCoderCode):
                                      type_array_len=type_array_len,
                                      decode_fn=decode_fn,
                                      type_value=type_array,
+                                     type_used=type_used,
                                      type_option=detail.particle.is_optional,
                                      next_grammar_id=next_grammar_id,
                                      indent=self.indent, level=level)
@@ -335,7 +352,8 @@ class ExiDecoderCode(ExiBaseCoderCode):
         return decode_content
 
     def __get_content_decode_int(self, element_typename, detail: ElementGrammarDetail, level):
-        type_value = f'{element_typename}->{detail.particle.name}'
+        type_value = self.__get_particle_storage_path(element_typename, detail.particle)
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
         next_grammar_id = detail.next_grammar
 
         if detail.particle.integer_is_unsigned:
@@ -349,6 +367,7 @@ class ExiDecoderCode(ExiBaseCoderCode):
         temp = self.generator.get_template(template_file)
         decode_content = temp.render(decode_comment=decode_comment,
                                      type_value=type_value,
+                                     type_used=type_used,
                                      type_option=detail.particle.is_optional,
                                      next_grammar_id=next_grammar_id,
                                      indent=self.indent, level=level)
@@ -356,7 +375,8 @@ class ExiDecoderCode(ExiBaseCoderCode):
         return decode_content
 
     def __get_content_decode_long_int(self, element_typename, detail: ElementGrammarDetail, level):
-        type_value = f'{element_typename}->{detail.particle.name}'
+        type_value = self.__get_particle_storage_path(element_typename, detail.particle)
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
         next_grammar_id = detail.next_grammar
 
         if detail.particle.integer_is_unsigned:
@@ -370,6 +390,7 @@ class ExiDecoderCode(ExiBaseCoderCode):
         temp = self.generator.get_template(template_file)
         decode_content = temp.render(decode_comment=decode_comment,
                                      type_value=type_value,
+                                     type_used=type_used,
                                      type_option=detail.particle.is_optional,
                                      next_grammar_id=next_grammar_id,
                                      indent=self.indent, level=level)
@@ -377,7 +398,8 @@ class ExiDecoderCode(ExiBaseCoderCode):
         return decode_content
 
     def __get_content_decode_signed(self, element_typename, detail: ElementGrammarDetail, level):
-        type_value = f'{element_typename}->{detail.particle.name}'
+        type_value = self.__get_particle_storage_path(element_typename, detail.particle)
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
         next_grammar_id = detail.next_grammar
 
         template_file = 'DecodeTypeSigned.jinja'
@@ -387,6 +409,7 @@ class ExiDecoderCode(ExiBaseCoderCode):
         temp = self.generator.get_template(template_file)
         decode_content = temp.render(decode_comment=decode_comment,
                                      type_value=type_value,
+                                     type_used=type_used,
                                      type_option=detail.particle.is_optional,
                                      next_grammar_id=next_grammar_id,
                                      indent=self.indent, level=level)
@@ -397,7 +420,8 @@ class ExiDecoderCode(ExiBaseCoderCode):
         decode_comment = '// decode: string (len, characters)'
         if detail.particle.is_attribute:
             decode_comment += ' (Attribute)'
-        type_value = f'{element_typename}->{detail.particle.name}'
+        type_value = self.__get_particle_storage_path(element_typename, detail.particle)
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
         type_length = type_value + f'.{detail.particle.length_parameter_name}'
         type_chars = type_value + f'.{detail.particle.value_parameter_name}'
         type_chars_size = detail.particle.prefixed_define_for_base_type
@@ -416,10 +440,11 @@ class ExiDecoderCode(ExiBaseCoderCode):
                                      type_length=type_length,
                                      type_chars=type_chars,
                                      type_chars_size=type_chars_size,
+                                     type_used=type_used,
                                      type_option=detail.particle.is_optional,
                                      type_simple=type_simple,
                                      type_array=detail.particle.max_occurs > 1,
-                                     type_array_length=f'{element_typename}->{detail.particle.name}.arrayLen',
+                                     type_array_length=f'{type_value}.arrayLen',
                                      type_array_define=detail.particle.prefixed_define_for_array,
                                      next_grammar_id=next_grammar_id,
                                      indent=self.indent, level=level)
@@ -430,8 +455,10 @@ class ExiDecoderCode(ExiBaseCoderCode):
         decode_comment = '// decode: element array'
         if detail.particle.is_attribute:
             decode_comment += ' (Attribute)'
-        type_array = f'{element_typename}->{detail.particle.name}.{detail.particle.value_parameter_name}'
-        type_array_len = f'{element_typename}->{detail.particle.name}.{detail.particle.length_parameter_name}'
+        type_value = self.__get_particle_storage_path(element_typename, detail.particle)
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
+        type_array = f'{type_value}.{detail.particle.value_parameter_name}'
+        type_array_len = f'{type_value}.{detail.particle.length_parameter_name}'
         type_loop_breakout = (
             detail.flag == GrammarFlag.LOOP and
             detail.particle.max_occurs_old is not None  # unbounded (max None) arrays don't need to break out of loop
@@ -452,6 +479,7 @@ class ExiDecoderCode(ExiBaseCoderCode):
                                      type_array_len_schema=array_length_from_schema,
                                      type_loop_breakout=type_loop_breakout,
                                      decode_fn=decode_fn,
+                                     type_used=type_used,
                                      next_grammar_id=next_grammar_id,
                                      next_grammar_id_breakout=next_grammar_id_breakout,
                                      indent=self.indent, level=level)
@@ -461,7 +489,8 @@ class ExiDecoderCode(ExiBaseCoderCode):
     def __get_content_decode_namespace_element(self, element_typename, particle: Particle, next_grammar, level):
         decode_comment = '// decode: namespace element'
         decode_fn = f'{CONFIG_PARAMS["decode_function_prefix"]}{particle.prefixed_type}'
-        type_value = f'{element_typename}->{particle.name}'
+        type_value = self.__get_particle_storage_path(element_typename, particle)
+        type_used = self.__get_particle_used_path(element_typename, particle)
         next_grammar_id = next_grammar
 
         temp = self.generator.get_template('DecodeTypeElement.jinja')
@@ -469,6 +498,7 @@ class ExiDecoderCode(ExiBaseCoderCode):
                                      decode_fn=decode_fn,
                                      type_option=particle.is_optional,
                                      type_value=type_value,
+                                     type_used=type_used,
                                      next_grammar_id=next_grammar_id,
                                      indent=self.indent, level=level)
 
@@ -479,7 +509,8 @@ class ExiDecoderCode(ExiBaseCoderCode):
         if detail.particle.is_attribute:
             decode_comment += ' (Attribute)'
         decode_fn = f'{CONFIG_PARAMS["decode_function_prefix"]}{detail.particle.prefixed_type}'
-        type_value = f'{element_typename}->{detail.particle.name}'
+        type_value = self.__get_particle_storage_path(element_typename, detail.particle)
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
         next_grammar_id = detail.next_grammar
 
         temp = self.generator.get_template('DecodeTypeElement.jinja')
@@ -488,6 +519,7 @@ class ExiDecoderCode(ExiBaseCoderCode):
                                      type_option=detail.particle.is_optional,
                                      type_extra=detail.is_extra_grammar,
                                      type_value=type_value,
+                                     type_used=type_used,
                                      next_grammar_id=next_grammar_id,
                                      indent=self.indent, level=level)
 
@@ -497,8 +529,10 @@ class ExiDecoderCode(ExiBaseCoderCode):
         decode_comment = '// decode: enum array'
         if detail.particle.is_attribute:
             decode_comment += ' (Attribute)'
-        type_value = f'{element_typename}->{detail.particle.name}.{detail.particle.value_parameter_name}'
-        type_array_len = f'{element_typename}->{detail.particle.name}.{detail.particle.length_parameter_name}'
+        type_storage = self.__get_particle_storage_path(element_typename, detail.particle)
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
+        type_value = f'{type_storage}.{detail.particle.value_parameter_name}'
+        type_array_len = f'{type_storage}.{detail.particle.length_parameter_name}'
         type_enum = detail.particle.prefixed_type
         next_grammar_id = detail.next_grammar
 
@@ -509,6 +543,7 @@ class ExiDecoderCode(ExiBaseCoderCode):
                                      bits_to_decode=detail.particle.bit_count_for_coding,
                                      type_option=detail.particle.is_optional,
                                      type_value=type_value,
+                                     type_used=type_used,
                                      type_enum=type_enum,
                                      next_grammar_id=next_grammar_id,
                                      indent=self.indent, level=level)
@@ -519,7 +554,8 @@ class ExiDecoderCode(ExiBaseCoderCode):
         decode_comment = '// decode: enum'
         if detail.particle.is_attribute:
             decode_comment += ' (Attribute)'
-        type_value = f'{element_typename}->{detail.particle.name}'
+        type_value = self.__get_particle_storage_path(element_typename, detail.particle)
+        type_used = self.__get_particle_used_path(element_typename, detail.particle)
         type_enum = detail.particle.prefixed_type
         next_grammar_id = detail.next_grammar
 
@@ -529,6 +565,7 @@ class ExiDecoderCode(ExiBaseCoderCode):
                                      type_option=detail.particle.is_optional,
                                      type_attribute=detail.particle.is_attribute,
                                      type_value=type_value,
+                                     type_used=type_used,
                                      type_enum=type_enum,
                                      next_grammar_id=next_grammar_id,
                                      indent=self.indent, level=level)

@@ -608,6 +608,7 @@ class SchemaAnalyzer(object):
             elem_data.has_choice = True
 
             choice = Choice()
+            choice_group_index = len(elem_data.choices) + 1
             for index, group in enumerate(model_group.iter_model()):
                 if hasattr(group, "model"):
                     if group.model == 'sequence':
@@ -615,11 +616,17 @@ class SchemaAnalyzer(object):
                         for seq_item in group.iter_model():
                             name = seq_item.local_name if seq_item.local_name is not None else 'ANY'
                             current.append([name, index + 1])
+                            for particle in elem_data.particles:
+                                if particle.name == name and particle.parent_choice_sequence_number < 0:
+                                    particle.generated_choice_group = choice_group_index
 
                         choice.choice_sequences.append(current)
                 else:
                     name = group.local_name if group.local_name is not None else 'ANY'
                     choice.choice_items.append([name, index + 1])
+                    for particle in elem_data.particles:
+                        if particle.name == name:
+                            particle.generated_choice_group = choice_group_index
 
             choice.min_occurs = model_group.min_occurs
             choice.multi_choice_max = 1

@@ -246,9 +246,9 @@ class DatatypeHeader:
                            variable_type=type_str,
                            variable_comment=comment)
 
-    def __generate_variables_with_union_and_used(self, elements):
+    def __generate_variables_with_union_and_used(self, union_content, element_names, union_name=''):
         temp = self.generator.get_template('SubStructVariablesWithUnionAndUsed.jinja')
-        return temp.render(elements=elements)
+        return temp.render(union_content=union_content, element_names=element_names, union_name=union_name)
 
     def __generate_variable(self, particle: Particle, is_in_types=False):
         # generate variable with type or struct type
@@ -282,10 +282,48 @@ class DatatypeHeader:
         return temp.render(indent=indent, level=indent_level,
                            sequence_comment=comment, sequence_name=name, sequence_content=content)
 
+    def __get_particle_union_content(self, particle: Particle, indent_level=2):
+        content = ''
+
+        if particle.is_optimized is True:
+            content += self.__generate_optimized_union_member(particle.name, ": Optimized out element", indent_level)
+        elif particle.type in self.analyzer_data.known_elements:
+            if particle.max_occurs > 1:
+                if particle.is_enum:
+                    content += self.__generate_enum_array_struct(particle)
+                else:
+                    if particle.simple_type_is_string:
+                        content += self.__generate_string(particle)
+                    else:
+                        content += self.__generate_array_struct(particle)
+            else:
+                if particle.type in self.analyzer_data.known_enums:
+                    content += self.__generate_variable(particle) + '\n'
+                else:
+                    content += self.__generate_variable(particle, True) + '\n'
+        else:
+            particle_type = tools_generator.get_particle_type(particle)
+            if particle.simple_type_is_string:
+                content += self.__generate_string(particle)
+            elif particle_type == 'binary':
+                content += self.__generate_base64binary(particle) + '\n'
+            else:
+                if particle.max_occurs > 1:
+                    content += self.__generate_array_struct(particle)
+                else:
+                    content += self.__generate_variable(particle) + '\n'
+
+        return content
+
     def __generate_optimized_struct(self, name, comment, indent_level=1):
         indent = ' ' * self.config['c_code_indent_chars']
         temp = self.generator.get_template('SubStructOptimized.jinja')
         return temp.render(indent=indent, level=indent_level, name=name, comment=comment)
+
+    def __generate_optimized_union_member(self, name, comment, indent_level=1):
+        indent = ' ' * self.config['c_code_indent_chars']
+        temp = self.generator.get_template('SubUnionOptimized.jinja')
+        return temp.render(indent=indent, level=indent_level, name=name, comment=comment) + '\n'
 
     def __get_particle_content(self, particle: Particle, elements, indent_level=1):
         content = ''
@@ -357,9 +395,28 @@ class DatatypeHeader:
         struct_content = ""
         elements = {}
         last_particle = None
+        generated_choice_groups = set()
 
         if not element.has_sequence:
             for particle in element.particles:
+                if particle.generated_choice_group > 0 and not particle.parent_has_choice_sequence:
+                    if particle.generated_choice_group in generated_choice_groups:
+                        continue
+
+                    union_content = ''
+                    element_names = []
+                    for choice_particle in element.particles:
+                        if (choice_particle.generated_choice_group == particle.generated_choice_group
+                                and not choice_particle.parent_has_choice_sequence):
+                            union_content += self.__get_particle_union_content(choice_particle, 2)
+                            element_names.append(choice_particle.name)
+
+                    struct_content += self.__generate_variables_with_union_and_used(
+                        union_content, element_names)
+                    struct_content += '\n'
+                    generated_choice_groups.add(particle.generated_choice_group)
+                    continue
+
                 last, content = self.__get_particle_content(particle, elements)
                 struct_content += content
                 if last:
@@ -369,7 +426,12 @@ class DatatypeHeader:
                 if last_particle:
                     struct_content += self.__generate_variable_with_used(last_particle)
             elif len(elements) > 1:
-                struct_content += self.__generate_variables_with_union_and_used(elements)
+                union_content = ''
+                element_names = []
+                for element_type, element_name in elements.items():
+                    union_content += f'        struct {element_type} {element_name};\n'
+                    element_names.append(element_name)
+                struct_content += self.__generate_variables_with_union_and_used(union_content, element_names)
         else:
             union_content = ''
             for index, sequence in enumerate(element.sequences):

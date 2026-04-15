@@ -70,7 +70,7 @@
 {{ indent * (level + 2) }}if (eventCode == 0)
 {{ indent * (level + 2) }}{
 {%- if type_option == 1 %}
-{{ indent * (level + 3) }}{{ type_value }}_isUsed = 1u;
+{{ indent * (level + 3) }}{{ type_used|default(type_value) }}_isUsed = 1u;
 {%- endif %}
 {{ indent * (level + 3) }}grammar_id = {{ next_grammar_id }};
 {{ indent * (level + 2) }}}
@@ -82,7 +82,7 @@
 {{ indent * level }}}
 {%- else %}
 {%- if type_option == 1 %}
-{{ indent * (level + 2) }}{{ type_value }}_isUsed = 1u;
+{{ indent * (level + 2) }}{{ type_used|default(type_value) }}_isUsed = 1u;
 {%- endif %}
 {{ indent * (level + 2) }}grammar_id = {{ next_grammar_id }};
 {%- endif %}

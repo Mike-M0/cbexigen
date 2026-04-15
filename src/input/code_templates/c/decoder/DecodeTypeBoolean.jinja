@@ -10,7 +10,7 @@
 {{ indent * (level + 2) }}{
 {{ indent * (level + 3) }}{{ type_value }} = value;
 {%- if type_option == 1 %}
-{{ indent * (level + 3) }}{{ type_value }}_isUsed = 1u;
+{{ indent * (level + 3) }}{{ type_used|default(type_value) }}_isUsed = 1u;
 {%- endif %}
 {{ indent * (level + 2) }}}
 {{ indent * (level + 1) }}}

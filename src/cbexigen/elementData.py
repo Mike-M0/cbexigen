@@ -47,6 +47,7 @@ class Particle:
     parent_sequence = []
     parent_has_choice_sequence: bool = False
     parent_choice_sequence_number = -1
+    generated_choice_group: int = -1
     parent_type_is_empty: bool = False
     has_simple_content: bool = False
     simple_content_names = []
@@ -122,6 +123,16 @@ class Particle:
     @property
     def prefixed_type(self):
         return self.prefix + self.typename_simple
+
+    @property
+    def generated_choice_container_name(self) -> str:
+        if self.parent_has_choice_sequence and self.parent_choice_sequence_number > 0:
+            return f'{CONFIG_PARAMS["choice_sequence_prefix"]}{self.parent_choice_sequence_number}'
+        return ''
+
+    @property
+    def is_in_generated_choice(self) -> bool:
+        return self.parent_has_choice_sequence or self.generated_choice_group > 0
 
     @property
     def is_array(self) -> bool:

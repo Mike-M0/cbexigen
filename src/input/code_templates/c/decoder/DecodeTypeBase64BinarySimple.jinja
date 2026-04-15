@@ -6,7 +6,7 @@
 {{ indent * (level + 1) }}if (error == 0)
 {{ indent * (level + 1) }}{
 {%- if type_option == 1 %}
-{{ indent * (level + 2) }}{{ type_value }}_isUsed = 1u;
+{{ indent * (level + 2) }}{{ type_used|default(type_value) }}_isUsed = 1u;
 {%- endif %}
 {{ indent * (level + 2) }}grammar_id = {{ next_grammar_id }};
 {{ indent * (level + 1) }}}

@@ -134,12 +134,25 @@ class ExiEncoderCode(ExiBaseCoderCode):
 
         return content
 
+    @staticmethod
+    def __get_particle_storage_path(element_typename, particle: Particle):
+        if particle.parent_has_choice_sequence:
+            return f'{element_typename}->{particle.generated_choice_container_name}.{particle.name}'
+        return f'{element_typename}->{particle.name}'
+
+    @staticmethod
+    def __get_particle_presence_parameter(element_typename, particle: Particle):
+        if particle.parent_has_choice_sequence:
+            return f'{element_typename}->{particle.generated_choice_container_name}'
+        return f'{element_typename}->{particle.name}'
+
     # ---------------------------------------------------------------------------
     # content delivery functions
     # ---------------------------------------------------------------------------
     def __get_content_encode_hex_binary(self, element_typename, detail: ElementGrammarDetail, level):
-        length_parameter = f'{element_typename}->{detail.particle.name}.{detail.particle.length_parameter_name}'
-        value_parameter = f'{element_typename}->{detail.particle.name}.{detail.particle.value_parameter_name}'
+        particle_path = self.__get_particle_storage_path(element_typename, detail.particle)
+        length_parameter = f'{particle_path}.{detail.particle.length_parameter_name}'
+        value_parameter = f'{particle_path}.{detail.particle.value_parameter_name}'
         size_parameter = f'{detail.particle.prefixed_define_for_base_type}'
 
         temp = self.generator.get_template('EncodeTypeHexBinary.jinja')
@@ -153,8 +166,9 @@ class ExiEncoderCode(ExiBaseCoderCode):
 
     def __get_content_encode_base64_binary_simple(self, element_typename, detail: ElementGrammarDetail, level):
         size_parameter = f'{detail.particle.prefixed_define_for_base_type}'
-        length_parameter = f'{element_typename}->{detail.particle.name}.{detail.particle.length_parameter_name}'
-        value_parameter = f'{element_typename}->{detail.particle.name}.{detail.particle.value_parameter_name}'
+        particle_path = self.__get_particle_storage_path(element_typename, detail.particle)
+        length_parameter = f'{particle_path}.{detail.particle.length_parameter_name}'
+        value_parameter = f'{particle_path}.{detail.particle.value_parameter_name}'
 
         temp = self.generator.get_template('EncodeTypeBase64BinarySimple.jinja')
         content = temp.render(length_parameter=length_parameter,
@@ -168,25 +182,21 @@ class ExiEncoderCode(ExiBaseCoderCode):
     def __get_content_encode_base64_binary(self, element_typename, detail: ElementGrammarDetail, level):
         size_parameter = f'{detail.particle.prefixed_define_for_base_type}'
         type_array_index = detail.particle.name + '_currentIndex'
+        particle_path = self.__get_particle_storage_path(element_typename, detail.particle)
 
-        if detail.particle.parent_has_choice_sequence:
-            length_parameter = f'{element_typename}->choice_{detail.particle.parent_choice_sequence_number}.' \
-                               f'{detail.particle.name}.{detail.particle.length_parameter_name}'
-            value_parameter = f'{element_typename}->choice_{detail.particle.parent_choice_sequence_number}.' \
-                              f'{detail.particle.name}.{detail.particle.value_parameter_name}'
-        elif detail.particle.has_simple_content:
-            length_parameter = f'{element_typename}->{detail.particle.name}.CONTENT.' \
+        if detail.particle.has_simple_content:
+            length_parameter = f'{particle_path}.CONTENT.' \
                                f'{detail.particle.length_parameter_name}'
-            value_parameter = f'{element_typename}->{detail.particle.name}.CONTENT.' \
+            value_parameter = f'{particle_path}.CONTENT.' \
                               f'{detail.particle.value_parameter_name}'
         else:
-            length_parameter = f'{element_typename}->{detail.particle.name}.{detail.particle.length_parameter_name}'
-            value_parameter = f'{element_typename}->{detail.particle.name}.{detail.particle.value_parameter_name}'
+            length_parameter = f'{particle_path}.{detail.particle.length_parameter_name}'
+            value_parameter = f'{particle_path}.{detail.particle.value_parameter_name}'
 
             if detail.particle.is_array:
-                length_parameter = (f'{element_typename}->{detail.particle.name}'
+                length_parameter = (f'{particle_path}'
                                     f'.array[{type_array_index}].{detail.particle.length_parameter_name}')
-                value_parameter = (f'{element_typename}->{detail.particle.name}'
+                value_parameter = (f'{particle_path}'
                                    f'.array[{type_array_index}].{detail.particle.value_parameter_name}')
 
         temp = self.generator.get_template('EncodeTypeBase64Binary.jinja')
@@ -201,7 +211,7 @@ class ExiEncoderCode(ExiBaseCoderCode):
         return self.trim_lf(content)
 
     def __get_content_encode_restricted(self, element_typename, detail: ElementGrammarDetail, level):
-        value_parameter = f'{element_typename}->{detail.particle.name}'
+        value_parameter = self.__get_particle_storage_path(element_typename, detail.particle)
         bits_to_encode = detail.particle.bit_count_for_coding
         min_value = detail.particle.min_value
 
@@ -215,7 +225,7 @@ class ExiEncoderCode(ExiBaseCoderCode):
         return content
 
     def __get_content_encode_boolean(self, element_typename, detail: ElementGrammarDetail, level):
-        value_parameter = f'{element_typename}->{detail.particle.name}'
+        value_parameter = self.__get_particle_storage_path(element_typename, detail.particle)
 
         temp = self.generator.get_template('EncodeTypeBoolean.jinja')
         content = temp.render(value_parameter=value_parameter,
@@ -225,7 +235,7 @@ class ExiEncoderCode(ExiBaseCoderCode):
         return content
 
     def __get_content_encode_byte(self, element_typename, detail: ElementGrammarDetail, level):
-        value_parameter = f'{element_typename}->{detail.particle.name}'
+        value_parameter = self.__get_particle_storage_path(element_typename, detail.particle)
         value_offset = (0 if detail.particle.integer_is_unsigned else -128)
 
         if detail.particle.integer_is_unsigned:
@@ -241,7 +251,7 @@ class ExiEncoderCode(ExiBaseCoderCode):
         return content
 
     def __get_content_encode_short(self, element_typename, detail: ElementGrammarDetail, level):
-        value_parameter = f'{element_typename}->{detail.particle.name}'
+        value_parameter = self.__get_particle_storage_path(element_typename, detail.particle)
 
         if detail.particle.integer_is_unsigned:
             temp = self.generator.get_template('EncodeTypeUnsignedShort.jinja')
@@ -255,7 +265,8 @@ class ExiEncoderCode(ExiBaseCoderCode):
         return content
 
     def __get_content_encode_unsigned_short_array(self, element_typename, detail: ElementGrammarDetail, level):
-        value_parameter = f'{element_typename}->{detail.particle.name}.{detail.particle.value_parameter_name}'
+        particle_path = self.__get_particle_storage_path(element_typename, detail.particle)
+        value_parameter = f'{particle_path}.{detail.particle.value_parameter_name}'
         index_parameter = detail.particle.name + '_currentIndex'
 
         temp = self.generator.get_template('EncodeTypeUnsignedShortArray.jinja')
@@ -267,7 +278,7 @@ class ExiEncoderCode(ExiBaseCoderCode):
         return content
 
     def __get_content_encode_int(self, element_typename, detail: ElementGrammarDetail, level):
-        value_parameter = f'{element_typename}->{detail.particle.name}'
+        value_parameter = self.__get_particle_storage_path(element_typename, detail.particle)
 
         if detail.particle.integer_is_unsigned:
             temp = self.generator.get_template('EncodeTypeUnsignedInt.jinja')
@@ -281,7 +292,7 @@ class ExiEncoderCode(ExiBaseCoderCode):
         return content
 
     def __get_content_encode_long_int(self, element_typename, detail: ElementGrammarDetail, level):
-        value_parameter = f'{element_typename}->{detail.particle.name}'
+        value_parameter = self.__get_particle_storage_path(element_typename, detail.particle)
 
         if detail.particle.integer_is_unsigned:
             temp = self.generator.get_template('EncodeTypeUnsignedInt64.jinja')
@@ -295,7 +306,7 @@ class ExiEncoderCode(ExiBaseCoderCode):
         return content
 
     def __get_content_encode_signed(self, element_typename, detail, level):
-        value_parameter = f'{element_typename}->{detail.particle.name}'
+        value_parameter = self.__get_particle_storage_path(element_typename, detail.particle)
 
         temp = self.generator.get_template('EncodeTypeSigned.jinja')
         content = temp.render(value_parameter=value_parameter,
@@ -304,16 +315,17 @@ class ExiEncoderCode(ExiBaseCoderCode):
         return content
 
     def __get_content_encode_string(self, element_typename, detail: ElementGrammarDetail, level):
-        length_parameter = f'{element_typename}->{detail.particle.name}.{detail.particle.length_parameter_name}'
-        value_parameter = f'{element_typename}->{detail.particle.name}.{detail.particle.value_parameter_name}'
+        particle_path = self.__get_particle_storage_path(element_typename, detail.particle)
+        length_parameter = f'{particle_path}.{detail.particle.length_parameter_name}'
+        value_parameter = f'{particle_path}.{detail.particle.value_parameter_name}'
         size_parameter = f'{detail.particle.prefixed_define_for_base_type}'
 
         type_array_index = detail.particle.name + '_currentIndex'
         type_simple = detail.particle.is_attribute or detail.particle.is_simple_content
         if detail.particle.is_array:
-            length_parameter = (f'{element_typename}->{detail.particle.name}'
+            length_parameter = (f'{particle_path}'
                                 f'.array[{type_array_index}].{detail.particle.length_parameter_name}')
-            value_parameter = (f'{element_typename}->{detail.particle.name}'
+            value_parameter = (f'{particle_path}'
                                f'.array[{type_array_index}].{detail.particle.value_parameter_name}')
 
         temp = self.generator.get_template('EncodeTypeString.jinja')
@@ -330,7 +342,8 @@ class ExiEncoderCode(ExiBaseCoderCode):
 
     def __get_content_encode_element_array(self, element_typename, detail: ElementGrammarDetail, level):
         type_parameter = self.config['encode_function_prefix'] + detail.particle.prefixed_type
-        value_parameter = f'{element_typename}->{detail.particle.name}.{detail.particle.value_parameter_name}'
+        particle_path = self.__get_particle_storage_path(element_typename, detail.particle)
+        value_parameter = f'{particle_path}.{detail.particle.value_parameter_name}'
         index_parameter = detail.particle.name + '_currentIndex'
 
         temp = self.generator.get_template('EncodeTypeElementArray.jinja')
@@ -356,7 +369,7 @@ class ExiEncoderCode(ExiBaseCoderCode):
 
     def __get_content_encode_element(self, element_typename, detail: ElementGrammarDetail, level):
         type_parameter = self.config['encode_function_prefix'] + detail.particle.prefixed_type
-        value_parameter = f'{element_typename}->{detail.particle.name}'
+        value_parameter = self.__get_particle_storage_path(element_typename, detail.particle)
 
         temp = self.generator.get_template('EncodeTypeElement.jinja')
         content = temp.render(type_parameter=type_parameter,
@@ -368,7 +381,8 @@ class ExiEncoderCode(ExiBaseCoderCode):
 
     def __get_content_encode_enum_array(self, element_typename, detail: ElementGrammarDetail, level):
         index_parameter = detail.particle.name + '_currentIndex'
-        value_parameter = f'{element_typename}->{detail.particle.name}.{detail.particle.value_parameter_name}'
+        particle_path = self.__get_particle_storage_path(element_typename, detail.particle)
+        value_parameter = f'{particle_path}.{detail.particle.value_parameter_name}'
         bits_to_encode = detail.particle.bit_count_for_coding
 
         temp = self.generator.get_template('EncodeTypeEnumArray.jinja')
@@ -381,7 +395,7 @@ class ExiEncoderCode(ExiBaseCoderCode):
         return content
 
     def __get_content_encode_enum(self, element_typename, detail: ElementGrammarDetail, level):
-        value_parameter = f'{element_typename}->{detail.particle.name}'
+        value_parameter = self.__get_particle_storage_path(element_typename, detail.particle)
         bits_to_encode = detail.particle.bit_count_for_coding
 
         temp = self.generator.get_template('EncodeTypeEnum.jinja')
@@ -525,11 +539,12 @@ class ExiEncoderCode(ExiBaseCoderCode):
                         f'; next={detail.next_grammar} (optional array)'
         type_parameter = CONFIG_PARAMS['encode_function_prefix'] + detail.particle.prefixed_name
         index_parameter = detail.particle.name + '_currentIndex'
-        length_parameter = (f'{grammar.element_typename}->{detail.particle.name}'
+        particle_path = self.__get_particle_storage_path(grammar.element_typename, detail.particle)
+        length_parameter = (f'{particle_path}'
                             f'.{detail.particle.length_parameter_name}')
 
         if detail.particle.is_array:
-            length_parameter = (f'{grammar.element_typename}->{detail.particle.name}'
+            length_parameter = (f'{particle_path}'
                                 f'.arrayLen')
 
         temp = self.generator.get_template('EncodeEventOptionalArrayElement.jinja')
@@ -565,10 +580,7 @@ class ExiEncoderCode(ExiBaseCoderCode):
                     event_comment = (f'// Event: {detail.flag} ({detail.particle.name}, {detail.particle.typename})'
                                      f'; next={detail.next_grammar}')
                 type_parameter = CONFIG_PARAMS['encode_function_prefix'] + detail.particle.prefixed_name
-                if detail.particle.parent_has_choice_sequence:
-                    parameter = f'{grammar.element_typename}->choice_{detail.particle.parent_choice_sequence_number}'
-                else:
-                    parameter = grammar.element_typename + '->' + detail.particle.name
+                parameter = self.__get_particle_presence_parameter(grammar.element_typename, detail.particle)
 
                 temp = self.generator.get_template('EncodeEventOptionalElement.jinja')
                 content += temp.render(option=option,
