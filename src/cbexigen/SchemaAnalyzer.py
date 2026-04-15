@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2022 - 2023 chargebyte GmbH
 # Copyright (c) 2022 - 2023 Contributors to EVerest
-from pathlib import Path
 from typing import Union
 
 from xmlschema import XMLSchema11, XsdElement, XsdType, XsdAttribute
@@ -318,6 +317,7 @@ class SchemaAnalyzer(object):
         particle.max_length = 4
         particle.min_occurs = any_element.min_occurs
         if any_element.max_occurs is None:
+            particle.max_occurs_old = any_element.max_occurs  # None
             particle.max_occurs = 1
         else:
             particle.max_occurs = any_element.max_occurs
@@ -398,19 +398,27 @@ class SchemaAnalyzer(object):
         particle.base_type = self.__get_base_type_name(element)
         particle.top_level_type = self.__get_primitive_type_name(element)
 
+        if element.type.is_complex():
+            particle.is_complex = True
+
         if element.is_restriction(element):
             particle.min_occurs = element.effective_min_occurs
+            particle.max_occurs_old = particle.max_occurs
+            # max_occurs None indicates "unbounded"
+            # see https://github.com/sissaschool/xmlschema/blob/v3.0.2/xmlschema/validators/particles.py#L138-L139
             if element.max_occurs is not None:
                 particle.max_occurs = element.effective_max_occurs
             else:
+                # all unbounded arrays get limited to 1 here, unless noted in OCCURRENCE_LIMITS_CORRECTED
                 if element.local_name in OCCURRENCE_LIMITS_CORRECTED:
                     particle.max_occurs = OCCURRENCE_LIMITS_CORRECTED[element.local_name]
-                    log_write(particle.name + " max_occurs changed from unbounded to " + str(particle.max_occurs))
                 else:
                     particle.max_occurs = 1
-                    log_write(particle.name + " max_occurs set to " + str(particle.max_occurs))
+                particle.max_occurs_old = element.max_occurs  # None
+                log_write(f'{particle.name} max_occurs changed from unbounded to {particle.max_occurs}')
+                log_write(f'{particle.name} type {particle.type} is complex: {particle.is_complex}, was array: {particle.was_array}')
 
-                particle.max_occurs_changed = True
+                particle.max_occurs_was_changed = True
                 self.__add_to_max_occurs(particle.name, particle.max_occurs)
 
         if element.type.is_restriction():
@@ -455,17 +463,21 @@ class SchemaAnalyzer(object):
 
         if substitute.is_restriction(substitute):
             particle.min_occurs = element.effective_min_occurs
+            particle.max_occurs_old = particle.max_occurs
+            # max_occurs None indicates "unbounded"
+            # see https://github.com/sissaschool/xmlschema/blob/v3.0.2/xmlschema/validators/particles.py#L138-L139
             if element.max_occurs is not None:
                 particle.max_occurs = element.effective_max_occurs
             else:
                 if element.local_name in OCCURRENCE_LIMITS_CORRECTED:
                     particle.max_occurs = OCCURRENCE_LIMITS_CORRECTED[element.local_name]
-                    log_write(particle.name + " max_occurs changed from unbounded to " + str(particle.max_occurs))
                 else:
                     particle.max_occurs = 1
-                    log_write(particle.name + " max_occurs set to " + str(particle.max_occurs))
+                particle.max_occurs_old = element.max_occurs  # None
+                log_write(f'{particle.name} max_occurs changed from unbounded to {particle.max_occurs} (substitute restriction)')
+                log_write(f'{particle.name} type {particle.type} is complex: {particle.is_complex}, was array: {particle.was_array}')
 
-                particle.max_occurs_changed = True
+                particle.max_occurs_was_changed = True
                 self.__add_to_max_occurs(particle.name, particle.max_occurs)
 
         if substitute.type.is_restriction():
@@ -560,7 +572,7 @@ class SchemaAnalyzer(object):
             if self.__is_abstract(child):
                 # get substituted particles for child
                 qname = self.__get_name(child)
-                subst_group = self.__current_schema.substitution_groups.target_dict.get(qname)
+                subst_group = self.__current_schema.substitution_groups._target_dict.get(qname)
                 if subst_group:
                     for elem in subst_group:
                         particle = self.__get_abstract_particle(child, elem)
@@ -578,7 +590,7 @@ class SchemaAnalyzer(object):
         if self.__is_abstract_type(element):
             # get substituted particles for element
             qname = self.__get_name(element)
-            subst_group = self.__current_schema.substitution_groups.target_dict.get(qname)
+            subst_group = self.__current_schema.substitution_groups._target_dict.get(qname)
             if subst_group:
                 for elem in subst_group:
                     particle = self.__get_abstract_particle(element, elem)
@@ -838,7 +850,7 @@ class SchemaAnalyzer(object):
                     msg_write((level + 1) * "    " + "ABSTRACT TYPE is extension")
 
                 qname = self.__get_name(child)
-                sg = self.__current_schema.substitution_groups.target_dict.get(qname)
+                sg = self.__current_schema.substitution_groups._target_dict.get(qname)
                 if sg:
                     for substitute in sg:
                         substitute_type_name = self.__get_type_name(substitute)
@@ -913,7 +925,7 @@ class SchemaAnalyzer(object):
         self.__build_schema_builtin_types_list()
 
         if self.__is_iso20:
-            for element in self.__current_schema.elements.target_dict.values():
+            for element in self.__current_schema.elements._target_dict.values():
                 if element.prefixed_name.startswith('xs:'):
                     continue
 
@@ -980,9 +992,9 @@ class SchemaAnalyzer(object):
         self.__scan_elements_for_empty_content()
         self.__scan_particles_for_empty_parent_type()
 
-        # In the 15118-20 AC and Dc schema some elements have not all possible particles.
+        # In the 15118-20 AC and DC schemas, some elements do not have all possible particles.
         # This is e.g. ChargeParameterDiscovery or ChargeLoop. There are missing the BPT elements.
-        # The BPT element are just derived and extended but not abstract.
+        # The BPT elements are just derived and extended but not abstract.
         if self.__is_iso20:
             self.__scan_for_derived_and_extended_elements()
 
@@ -999,7 +1011,7 @@ class SchemaAnalyzer(object):
 
     def __build_schema_builtin_types_list(self):
         xs_namespace = self.__current_schema.namespaces['xs']
-        for value in self.__current_schema.types.target_dict.values():
+        for value in self.__current_schema.types._target_dict.values():
             if value.target_namespace == xs_namespace:
                 if value.__class__.__name__ == 'XsdAtomicBuiltin':
                     if value.simple_type.base_type is not None:
@@ -1052,7 +1064,7 @@ class SchemaAnalyzer(object):
         self.__known_fragments.clear()
         fragments = {}
 
-        for element in self.__current_schema.elements.target_dict.values():
+        for element in self.__current_schema.elements._target_dict.values():
             if element.default_namespace:
                 if element.name not in fragments.keys():
                     fragments[element.name] = __get_fragment(element)
@@ -1098,7 +1110,7 @@ class SchemaAnalyzer(object):
         current_namespace = self.__current_schema.get_schema('')
         for ele in current_namespace.elements.values():
             items = []
-            for value in current_namespace.elements.target_dict.values():
+            for value in current_namespace.elements._target_dict.values():
                 if value.default_namespace:
                     name = self.__get_type_name_short(value)
                     if name == '' or name in ['AnonType', 'string']:
@@ -1140,7 +1152,7 @@ class SchemaAnalyzer(object):
     def __build_generate_elements_types_list(self):
         xs_namespace = self.__current_schema.namespaces['xs']
         type_list = []
-        for value in self.__current_schema.types.target_dict.values():
+        for value in self.__current_schema.types._target_dict.values():
             if value.target_namespace != xs_namespace and value.content_type_label == 'element-only':
                 type_list.append(value.local_name)
 
@@ -1266,6 +1278,7 @@ class SchemaAnalyzer(object):
         parent_element.has_abstract_sequence = True
         # FIXME abstract_seq may need to inherit min/max_occurs(_old)
         parent_element.abstract_sequences.append((abstract_seq, min_occurs, max_occurs))
+        log_write(f'  Adding abstract sequence to {parent_element.name_short}: {abstract_seq}.')
 
     def __copy_particles_from_empty_content_elements(self, element: ElementData, parents):
         parent: ElementData
@@ -1447,7 +1460,7 @@ class SchemaAnalyzer(object):
 
         def find_base_type(base_type_name):
             result = None
-            for item in self.__current_schema.elements.target_dict.values():
+            for item in self.__current_schema.elements._target_dict.values():
                 if item.prefixed_name.startswith('xs:'):
                     continue
                 if item.type.base_type is None:
@@ -1471,6 +1484,7 @@ class SchemaAnalyzer(object):
                         list_with_missing.append(particle)
                         log_write(f'    Adding abstract particle {particle.name} to missing list.')
 
+                    # get the base type, add it as particle
                     missing_element = find_base_type(particle.type_short)
                     if missing_element is not None:
                         part = self.__get_particle(missing_element)
@@ -1495,9 +1509,27 @@ class SchemaAnalyzer(object):
                 for part in list_with_missing:
                     abstract_seq.append(part.name)
 
+                # if a containing abstract sequence already exists, expand it with the newly found missing elements
+                # else just add them as an abstract sequence
+                found_exising_abstract_sequence = False
+                for element_abstract_sequence_index, element_abstract_sequence in enumerate(element.abstract_sequences):
+                    if particle.name in element_abstract_sequence[0]:  # tuple ([abstract_choice_list], min_occurs, max_occurs)
+                        found_exising_abstract_sequence = True
+                        log_write(f'  {element.name_short} already has an abstract sequence containing {particle.name}, expanding')
+                        sequence_to_expand = element.abstract_sequences[element_abstract_sequence_index][0]
+                        sequence_to_expand.extend(abstract_seq)
+                        log_write(f'Initial sequence is {element_abstract_sequence}')
+                        sequence_to_expand = sorted(set(sequence_to_expand))
+                        element_abstract_sequence_list = list(element_abstract_sequence)
+                        element_abstract_sequence_list[0] = sequence_to_expand
+                        element.abstract_sequences[element_abstract_sequence_index] = tuple(element_abstract_sequence_list)
+                        log_write(f'New     sequence is {element.abstract_sequences[element_abstract_sequence_index]}')
+                if not found_exising_abstract_sequence:
+                    element.abstract_sequences.append((abstract_seq, 1, 1))  # tuple ([abstract_choice_list], min_occurs, max_occurs)
+                # this is now true in every case
                 element.has_abstract_sequence = True
-                element.abstract_sequences.append((abstract_seq, 1, 1))
-                log_write(f'  Add abstract sequence to {element.name_short}.')
+
+                log_write(f'  Added abstract sequence to {element.name_short}: {abstract_seq}.')
 
                 for p_index, particle in enumerate(element.particles):
                     exist = [x for x in list_with_missing if x.name == particle.name]
@@ -1508,17 +1540,21 @@ class SchemaAnalyzer(object):
                     elif first_set:
                         last = p_index
 
-                log_write('  New particle list:')
+                log_write('  Old particle list:')
+                for part in element.particles:
+                    log_write(f'      {part.name} ({part.type_short})')
                 new_list = element.particles[:first]
                 new_list.extend(list_with_missing)
                 if last > 0:
                     new_list.extend(element.particles[last:])
+                log_write('  New particle list:')
                 for part in new_list:
                     log_write(f'      {part.name} ({part.type_short})')
 
                 element.particles = new_list
                 log_write(f'  Replacing particle list of {element.name_short}.')
                 log_write('')
+        log_write('Done with scan for derived and extended elements')
 
     def __adjust_choice_elements(self):
         log_write('')
@@ -1547,11 +1583,15 @@ class SchemaAnalyzer(object):
             return
 
         for element in self.__generate_elements:
+            particle: Particle
             for particle in element.particles:
                 if (particle.type_short in optimizations.keys()
                    and particle.max_occurs > optimizations[particle.type_short]):
+                    particle.max_occurs_old = particle.max_occurs
                     particle.max_occurs = optimizations[particle.type_short]
-                    particle.max_occurs_changed = True
+                    particle.max_occurs_was_changed = True
+                    log_write(f'{particle.name} max_occurs changed from {particle.max_occurs_old} to {particle.max_occurs}')
+                    log_write(f'{particle.name} type {particle.type} is complex: {particle.is_complex}, was array: {particle.was_array}')
 
     def __mark_field_optimizations(self):
         config_module = get_config_module()

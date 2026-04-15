@@ -294,6 +294,15 @@ class ExiEncoderCode(ExiBaseCoderCode):
 
         return content
 
+    def __get_content_encode_signed(self, element_typename, detail, level):
+        value_parameter = f'{element_typename}->{detail.particle.name}'
+
+        temp = self.generator.get_template('EncodeTypeSigned.jinja')
+        content = temp.render(value_parameter=value_parameter,
+                              next_grammar=detail.next_grammar,
+                              indent=self.indent, level=level)
+        return content
+
     def __get_content_encode_string(self, element_typename, detail: ElementGrammarDetail, level):
         length_parameter = f'{element_typename}->{detail.particle.name}.{detail.particle.length_parameter_name}'
         value_parameter = f'{element_typename}->{detail.particle.name}.{detail.particle.value_parameter_name}'
@@ -432,6 +441,8 @@ class ExiEncoderCode(ExiBaseCoderCode):
                 type_content = self.__get_content_encode_int(grammar.element_typename, detail, level)
             elif detail.particle.integer_base_type == 'uint64':
                 type_content = self.__get_content_encode_long_int(grammar.element_typename, detail, level)
+            elif detail.particle.integer_base_type == 'signed':
+                type_content = self.__get_content_encode_signed(grammar.element_typename, detail, level)
             else:
                 log_write_error(f"Unhandled numeric type: '{detail.particle.name}': "
                                 f"'{detail.particle.type_short}', " +
@@ -586,6 +597,7 @@ class ExiEncoderCode(ExiBaseCoderCode):
                     content += temp.render(event_comment=event_comment,
                                            indent=self.indent, level=level)
                 else:
+                    # currently unused
                     event_comment = f'// Event: {detail.particle_name} (index={detail.event_index}); next={detail.next_grammar}'
                     temp = self.generator.get_template('EncodeEventOptionalElementNone.jinja')
                     content += temp.render(option=option,
@@ -621,6 +633,7 @@ class ExiEncoderCode(ExiBaseCoderCode):
 
     def __get_event_content(self, grammar: ElementGrammar, level):
         content = ''
+        first: ElementGrammarDetail
         first = grammar.details[0]
 
         if first.flag != GrammarFlag.ERROR:
@@ -651,7 +664,9 @@ class ExiEncoderCode(ExiBaseCoderCode):
 
                     # log_write_error(f"__get_event_content(): option = {option} for grammar '{grammar.element_typename}', index {detail.event_index}, detail '{detail.particle_name}'")
 
-                    if detail.is_mandatory_array:
+                    if detail.particle.was_array:
+                        content += self.__get_event_content_for_optional_element(detail, grammar, option, level)
+                    elif detail.is_mandatory_array:
                         if option >= 0:
                             content += self.__get_event_content_for_array_element(first, grammar, option, level)
                         else:
@@ -674,7 +689,7 @@ class ExiEncoderCode(ExiBaseCoderCode):
     def __get_event_content_namespace_element(self, element: ElementData, grammar: ElementGrammar, level):
         content = ''
 
-        if grammar.details[0].flag == GrammarFlag.START:
+        if grammar.details[0].flag_is_start_or_loop:
             names = []
             for particle in element.particles:
                 names.append(particle.name)

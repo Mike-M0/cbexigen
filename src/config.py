@@ -334,7 +334,8 @@ c_files_to_generate = {
             'identifier': 'APP_HANDSHAKE_DECODER_C',
             'include_std_lib': ['stdint.h'],
             'include_other': ['exi_basetypes.h', 'exi_basetypes_decoder.h', 'exi_error_codes.h',
-                              'exi_header.h', 'exi_types_decoder.h', 'appHand_Datatypes.h']
+                              'exi_header.h', 'exi_types_decoder.h', 'appHand_Datatypes.h',
+                              'appHand_Decoder.h']
         }
     },
     'appHand_Encoder': {
@@ -353,7 +354,7 @@ c_files_to_generate = {
             'identifier': 'APP_HANDSHAKE_ENCODER_C',
             'include_std_lib': ['stdint.h'],
             'include_other': ['exi_basetypes_encoder.h', 'exi_error_codes.h',
-                              'exi_header.h', 'appHand_Datatypes.h']
+                              'exi_header.h', 'appHand_Datatypes.h', 'appHand_Encoder.h']
         }
     },
     'din_msgDefDatatypes': {

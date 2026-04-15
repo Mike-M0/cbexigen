@@ -141,7 +141,7 @@ class DatatypeHeader:
         comment = '// enum for function numbers'
         enum_type = self.parameters['prefix'] + 'generatedFunctionNumbersType'
         items = []
-        for value in self.scheme.elements.target_dict.values():
+        for value in self.scheme.elements._target_dict.values():
             if value.default_namespace:
                 items.append(self.parameters['prefix'] + value.local_name)
         items.sort()
@@ -505,7 +505,9 @@ class DatatypeHeader:
                            elements=self.analyzer_data.known_prototypes)
 
     def __append_to_global_define_list(self, element: ElementData):
-        # TODO: check if particle is in OCCURRENCE_LIMITS_CORRECTED, should then result in an array definition
+        # TODO: check if particle is in OCCURRENCE_LIMITS_CORRECTED, should then result in an array definition;
+        #       for backwards compatibility, we stick with single elements for arrays reduced to size 1 in
+        #       OCCURRENCE_LIMITS_CORRECTED
 
         for particle in element.particles:
             if particle.is_array:
@@ -551,7 +553,7 @@ class DatatypeHeader:
                 else:
                     element_type = self.scheme.types.get(element.type_short)
                     if element_type is None:
-                        element_type = self.scheme.types.target_dict.get(element.type)
+                        element_type = self.scheme.types._target_dict.get(element.type)
                         if element_type is None:
                             continue
 
